@@ -1,0 +1,328 @@
+esphome:
+  name: door-station
+  friendly_name: door-station
+
+esp8266:
+  board: d1_mini
+
+wifi:
+  ssid: !secret wifi_iot
+  password: !secret wifi_pass
+  # Optional manual IP
+  manual_ip:
+    static_ip: !secret door-station_ip 
+    gateway: !secret gateway
+    subnet: 255.255.255.0
+    dns1: !secret dns1
+#    dns2: !secret dns2
+  fast_connect: true
+  
+  ap:
+    ssid: "Door-Station"
+    password: !secret fallback hotspot_password
+# Enable fallback hotspot (captive portal) in case wifi connection fails
+captive_portal:
+
+# Enable logging
+logger:
+
+ota:
+  - platform: esphome
+  - platform: http_request
+
+http_request:
+  verify_ssl: false
+
+update:
+  - platform: http_request
+    name: Firmware Update
+    source: http://172.16.15.98/api/esphome/door-station/manifest.json
+
+web_server:
+  port: 80
+  auth: 
+    username: !secret web_user
+    password: !secret web_pass
+
+mqtt:
+  broker: !secret broker_ip
+  port: 1883
+  username: esphome
+  password: !secret mqtt_password
+  # ...
+  birth_message:
+    topic: esphome/door-station/status
+    payload: online
+  will_message:
+    topic: esphome/door-station/status
+    payload: offline
+  on_message:
+     - topic: door-station/turoffner/commands/
+       payload: "ON"
+       qos: 0
+       then:
+         - logger.log: "Remote Türoffner button pressed"
+         - output.turn_on: relay_a
+         - delay: !lambda "return id(turofner_duration).state * 1000;"
+         - output.turn_off: relay_a
+         - logger.log: "Türoffner deactivated"
+
+     - topic: door-station/licht/commands/
+       payload: "ON"
+       qos: 0
+       then:
+         - logger.log: "Remote Licht button pressed"
+         - output.turn_on: relay_b
+         - delay: !lambda "return id(licht_duration).state * 1000;"
+         - output.turn_off: relay_b
+         - logger.log: "Licht deactivated"        
+
+
+rtttl:
+  output: biper
+  on_finished_playback:
+    - logger.log: 'Beeps ended!'
+
+# Dynamic duration setting
+number:
+  - platform: template
+    name: "Türoffner Duration"
+    id: turofner_duration
+    min_value: 1
+    max_value: 5
+    step: 1
+    unit_of_measurement: "s"
+    icon: "mdi:timer-lock-outline"
+    optimistic: true
+    initial_value: 1
+    restore_value: true
+
+  - platform: template
+    name: "Licht Duration"
+    id: licht_duration
+    min_value: 1
+    max_value: 300
+    step: 1
+    unit_of_measurement: "s"
+    icon: "mdi:timer-outline"
+    optimistic: true
+    initial_value: 120
+    restore_value: true
+
+
+sensor:
+
+#  - platform: dht
+#    model: DHT11
+#    pin:
+#      number: D3
+#      mode: INPUT_PULLUP
+#      inverted: false
+#    temperature:
+#      filters:
+#      - offset: -4.0
+#      name: "DS Temperature"
+#    humidity:
+#      accuracy_decimals: 1
+#      name: "DS Humidity"
+#    update_interval: 30s
+    
+  - platform: wifi_signal
+    name: Door Station WIFI
+    update_interval: 60s
+  - platform: uptime
+    name: Door Station UpTime
+
+binary_sensor:
+  - platform: gpio
+    name: "Home Bell"
+    id: hbell
+    device_class: sound
+    icon: mdi:bell-ring
+    pin:
+      number: D5
+      mode: INPUT_PULLUP
+      inverted: true
+    on_press:
+      then:
+      - rtttl.play:
+          rtttl: "two short:d=4,o=5,b=100:16e6,16e6"
+
+  - platform: gpio
+    name: "Building Bell"
+    device_class: sound
+    id: bbell
+    icon: mdi:bell-ring
+    pin:
+      number: D0
+      inverted: false
+
+#  - platform: gpio
+#    pin: GPIO12
+#    name: $friendly_name PIR
+#    device_class: motion
+
+
+  - platform: gpio
+    name: "Home Door"
+    device_class: door
+    pin:
+      number: D6
+      mode: INPUT_PULLUP
+      inverted: false
+#    internal: true
+#    on_press:
+#      then:
+#      - rtttl.play:
+#          rtttl: "two short:d=4,o=5,b=100:16e6,16e6"
+#    on_press:
+#    - switch.toggle: 'relej'
+#    internal: true
+    on_press:
+      then:
+      - rtttl.play:
+          rtttl: "two short:d=4,o=5,b=100:16e6,16e6"
+#      - rtttl.play:
+#          rtttl: "GoodBad:d=4,o=5,b=56:32p,32a#,32d#6,32a#,32d#6,8a#.,16f#.,16g#.,d#,32a#,32d#6,32a#,32d#6,8a#.,16f#.,16g#.,c#6,32a#,32d#6,32a#,32d#6,8a#.,16f#.,32f.,32d#.,c#,32a#,32d#6,32a#,32d#6,8a#.,16g#.,d#"
+#      - rtttl.play:
+#          rtttl: "The Simpsons:d=4,o=5,b=160:c.6,e6,f#6,8a6,g.6,e6,c6,8a,8f#,8f#,8f#,2g,8p,8p,8f#,8f#,8f#,8g,a#.,8c6,8c6,8c6,c6"
+#      - delay: 2s
+#      - rtttl.play:
+#          rtttl: "'MissionImp:d=16,o=6,b=95:32d,32d#,32d,32d#,32d,32d#,32d,32d#,32d,32d,32d#,32e,32f,32f#,32g,g,8p,g,8p,a#,p,c7,p,g,8p,g,8p,f,p,f#,p,g,8p,g,8p,a#,p,c7,p,g,8p,g,8p,f,p,f#,p,a#,g,2d,32p,a#,g,2c#,32p,a#,g,2c,a#5,8c,2p,32p,a#5,g5,2f#,32p,a#5,g5,2f,32p,a#5,g5,2e,d#,8d'"
+#    on_press:
+#      then:
+#      - rtttl.play:
+#          rtttl: "'MissionImp:d=16,o=6,b=95:32d,32d#,32d,32d#,32d,32d#,32d,32d#,32d,32d,32d#,32e,32f,32f#,32g,g,8p,g,8p,a#,p,c7,p,g,8p,g,8p,f,p,f#,p,g,8p,g,8p,a#,p,c7,p,g,8p,g,8p,f,p,f#,p,a#,g,2d,32p,a#,g,2c#,32p,a#,g,2c,a#5,8c,2p,32p,a#5,g5,2f#,32p,a#5,g5,2f,32p,a#5,g5,2e,d#,8d'"
+
+button:
+  - platform: template
+    name: "Turofner"
+    id: tur_button
+    icon: mdi:key-variant
+#    entity_category: ""
+    on_press:
+      - logger.log: "Türoffner button pressed"
+      - output.turn_on: relay_a
+      - delay: !lambda "return id(turofner_duration).state * 1000;"
+      - output.turn_off: relay_a
+      - logger.log: "Türoffner deactivated"
+
+  - platform: template
+    name: "Licht"
+    id: tur_licht
+    icon: mdi:home-lightbulb-outline
+#    entity_category: ""
+    on_press:
+      - logger.log: "Licht button pressed"
+      - output.turn_on: relay_b
+      - delay: !lambda "return id(licht_duration).state * 1000;"
+      - output.turn_off: relay_b
+      - logger.log: "Licht deactivated"
+
+
+
+  - platform: shutdown
+    name: "DoorStation Shutdown"
+    entity_category: diagnostic
+
+  - platform: restart
+    name: "DoorStation Restart"
+    entity_category: diagnostic
+
+  - platform: safe_mode
+    name: "DoorStation Restart (Safe Mode)"
+    entity_category: diagnostic
+    
+
+
+output:
+
+  - platform: esp8266_pwm
+    pin: D7
+    id: biper
+    inverted: true
+
+  - platform: gpio
+    id: relay_a
+    pin: D8
+
+  - platform: gpio
+    id: relay_b
+    pin: D2
+
+
+# Status LED configuration
+#status_led:
+#  pin: D4
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Button configuration with pull-up
+# binary_sensor:
+#   - platform: gpio
+#     pin:
+#       number: D1
+#       mode: INPUT_PULLUP
+#       inverted: true
+#     name: "Türoffner Button"
+#     device_class: lock
+#     on_press:
+#       - logger.log: "Türoffner button pressed"
+#       - output.turn_on: relay1
+#       - delay: !lambda "return id(turofner_duration).state * 1000;"
+#       - output.turn_off: relay1
+#       - logger.log: "Türoffner deactivated"
+
+#   - platform: gpio
+#     pin:
+#       number: D2
+#       mode: INPUT_PULLUP
+#       inverted: true
+#     name: "Licht Button"
+#     device_class: light
+#     on_press:
+#       - logger.log: "Licht button pressed"
+#       - output.turn_on: relay2
+#       - delay: !lambda "return id(licht_duration).state * 1000;"
+#       - output.turn_off: relay2
+#       - logger.log: "Licht deactivated"
+
+#   - platform: gpio
+#     pin:
+#       number: D6
+#       mode: INPUT_PULLUP
+#       inverted: true
+#     name: "BuildingBell Button"
+#     icon: "mdi:bell-check-outline"
+#     device_class: sound
+
+#   - platform: gpio
+#     pin:
+#       number: D7
+#       mode: INPUT_PULLUP
+#       inverted: true
+#     name: "DoorBell Button"
+#     icon: "mdi:doorbell"
+#     device_class: sound
+  
+#   - platform: gpio
+#     pin:
+#       number: D8
+#       mode: INPUT_PULLUP
+#       inverted: true
+#     name: "Door"
+#     icon: "mdi:door"
+#     device_class: door
+
+
