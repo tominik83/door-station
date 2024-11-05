@@ -81,7 +81,7 @@ mqtt:
 rtttl:
   output: biper
   on_finished_playback:
-    - logger.log: 'Beeps ended!'
+    - logger.log: 'Beepss ended!'
 
 # Dynamic duration setting
 number:
